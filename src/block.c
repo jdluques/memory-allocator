@@ -1,5 +1,6 @@
 #include "block.h"
 #include "freelist.h"
+#include "internal.h"
 
 #include <stddef.h>
 
@@ -19,22 +20,18 @@ block_header_t *block_split(block_header_t *block, size_t size) {
 }
 
 block_header_t *block_coalesce(block_header_t *block) {
-    block_header_t *next =BLOCK_NEXT(block);
+    block_header_t *next = BLOCK_NEXT(block);
     
-    if (next && next->is_free) {
+    if ((void *)next < heap_end && next->is_free) {
         freelist_remove(next);
-        
-        size_t next_size;
-        if (next) next_size =next->size;
-        else next_size = 0;
-
-        block->size += HEADER_SIZE + next_size;
+        block->size += HEADER_SIZE + next->size;
     }
     
     return block;
 }
 
 bool block_can_split(block_header_t *block, size_t size) {
+    if (block->size < size) return false;
     size_t remainder = block->size - size;
     return remainder >= HEADER_SIZE + MIN_BLOCK_SIZE;
 }

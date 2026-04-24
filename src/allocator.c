@@ -3,6 +3,7 @@
 #include "allocator.h"
 #include "block.h"
 #include "freelist.h"
+#include "internal.h"
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -12,7 +13,7 @@
 
 static bool   heap_initialized  = false;
 static void  *heap_start        = NULL;
-static void  *heap_end          = NULL;
+void         *heap_end          = NULL;
 
 static void heap_init(void) {
     heap_start  = sbrk(0);
@@ -32,9 +33,10 @@ static block_header_t *heap_extend(size_t size) {
 
     block_header_t *block = (block_header_t *)raw;
     block->size         = extend_size - HEADER_SIZE;
-    block->is_free      = true;
+    block->is_free      = false;
     block->next_free    = NULL;
     block->prev_free    = NULL;
+
     heap_end = (char *)raw + extend_size;
 
     return block;
@@ -47,7 +49,6 @@ void *my_malloc(size_t size) {
     size = ALIGN(size);
 
     block_header_t *block = freelist_find(size);
-
     if (block) {
         freelist_remove(block);
     } else {
@@ -70,8 +71,8 @@ void my_free(void *ptr) {
 
     block_header_t *block = BLOCK_HEADER(ptr);
     block->is_free = true;
-
     block = block_coalesce(block);
+    
     freelist_insert(block);
 }
 
@@ -86,7 +87,7 @@ void *my_calloc(size_t nmemb, size_t size) {
 }
 
 void *my_realloc(void *ptr, size_t size) {
-    if (!ptr) return my_malloc(size);
+    if (!ptr)      return my_malloc(size);
     if (size == 0) { my_free(ptr); return NULL; }
 
     block_header_t *block = BLOCK_HEADER(ptr);
