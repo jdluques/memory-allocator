@@ -11,9 +11,9 @@
 #include <stddef.h>
 #include <string.h>
 
-static bool   heap_initialized  = false;
-static void  *heap_start        = NULL;
-void         *heap_end          = NULL;
+static bool heap_initialized = false;
+void *heap_start    = NULL;
+void *heap_end      =  NULL;
 
 static void heap_init(void) {
     heap_start  = sbrk(0);
@@ -23,7 +23,7 @@ static void heap_init(void) {
 }
 
 static block_header_t *heap_extend(size_t size) {
-    size_t extend_size = size + HEADER_SIZE;
+    size_t extend_size = size + HEADER_SIZE + FOOTER_SIZE;
     if (extend_size < HEAP_CHUNK_SIZE)
         extend_size = HEAP_CHUNK_SIZE;
 
@@ -32,7 +32,7 @@ static block_header_t *heap_extend(size_t size) {
         return NULL;
 
     block_header_t *block = (block_header_t *)raw;
-    block->size         = extend_size - HEADER_SIZE;
+    block_set_size(block, extend_size - HEADER_SIZE - FOOTER_SIZE);
     block->is_free      = false;
     block->next_free    = NULL;
     block->prev_free    = NULL;
