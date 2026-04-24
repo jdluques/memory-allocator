@@ -42,6 +42,7 @@ target_link_options(alloc_warnings INTERFACE
 # ── Core library ───────────────────────────────────────────────────────────────
 
 add_library(alloc STATIC
+    src/allocator.c
     src/block.c
     src/freelist.c
 )
