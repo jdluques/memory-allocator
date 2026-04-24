@@ -63,6 +63,31 @@ target_compile_definitions(alloc PRIVATE
     $<$<CONFIG:Debug>:ALLOC_DEBUG=1>
 )
 
+# ── Tests ──────────────────────────────────────────────────────────────────────
+
+option(ALLOC_BUILD_TESTS "Build the test suite" ON)
+
+if(ALLOC_BUILD_TESTS)
+    enable_testing()
+    find_program(VALGRIND valgrind)
+
+    function(add_alloc_test name)
+        add_executable(${name} tests/${name}.c)
+        target_link_libraries(${name} PRIVATE alloc alloc_warnings)
+        add_test(NAME ${name} COMMAND ${name})
+
+        if(VALGRIND)
+            add_test(NAME ${name}_valgrind COMMAND
+                ${VALGRIND} --leak-check=full --error-exitcode=1 ./${name})
+        endif()
+    endfunction()
+
+    add_alloc_test(test_basic)
+    add_alloc_test(test_coalesce)
+    add_alloc_test(test_fragmentation)
+    add_alloc_test(test_stress)
+endif()
+
 # ── Install rules ──────────────────────────────────────────────────────────────
 
 option(ALLOC_INSTALL "Install the library and headers" ON)
