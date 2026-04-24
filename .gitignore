@@ -48,4 +48,6 @@ Module.symvers
 Mkfile.old
 dkms.conf
 *.dwo
+
 build/
+.cache/
