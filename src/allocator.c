@@ -10,6 +10,7 @@
 #include <unistd.h>
 #include <stddef.h>
 #include <string.h>
+#include <sys/mman.h>
 
 static bool heap_initialized = false;
 void *heap_start    = NULL;
@@ -42,6 +43,26 @@ static block_header_t *heap_extend(size_t size) {
     return block;
 }
 
+static void *mmap_alloc(size_t size) {
+    size_t total = ALIGN(HEADER_SIZE + size);
+
+    void *raw = mmap(NULL, total, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (raw == MAP_FAILED) return NULL;
+
+    block_header_t *block = (block_header_t *)raw;
+    block_set_size(block, size | MMAP_FLAG);
+    block->is_free      = false;
+    block->next_free    = NULL;
+    block->prev_free    = NULL;
+
+    return BLOCK_PAYLOAD(block);
+}
+
+static void mmap_free(block_header_t *block) {
+    size_t total = ALIGN(HEADER_SIZE + BLOCK_RAW_SIZE(block));
+    munmap(block, total);
+}
+
 void *my_malloc(size_t size) {
     if (size == 0) return NULL;
     if (!heap_initialized) heap_init();
@@ -52,6 +73,9 @@ void *my_malloc(size_t size) {
     if (block) {
         freelist_remove(block);
     } else {
+        if (size >= MMAP_THRESHOLD)
+            return mmap_alloc(size);
+        
         block = heap_extend(size);
         if (!block) return NULL;
     }
@@ -70,6 +94,12 @@ void my_free(void *ptr) {
     if (!ptr) return;
 
     block_header_t *block = BLOCK_HEADER(ptr);
+
+    if (BLOCK_IS_MMAP(block)) {
+        mmap_free(block);
+        return;
+    }
+
     block->is_free = true;
     block = block_coalesce(block);
     
@@ -90,10 +120,11 @@ void *my_realloc(void *ptr, size_t size) {
     if (!ptr)      return my_malloc(size);
     if (size == 0) { my_free(ptr); return NULL; }
 
-    block_header_t *block = BLOCK_HEADER(ptr);
+    block_header_t *block    = BLOCK_HEADER(ptr);
+    size_t          raw_size = BLOCK_RAW_SIZE(block);
 
-    if (block->size >= size) {
-        if (block_can_split(block, size)) {
+    if (raw_size >= size) {
+        if (!BLOCK_IS_MMAP(block) && block_can_split(block, size)) {
             block_header_t *remainder = block_split(block, size);
             freelist_insert(remainder);
         }

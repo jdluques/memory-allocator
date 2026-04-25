@@ -31,6 +31,12 @@ typedef struct block_footer {
 #define PREV_BLOCK(header)      ((block_header_t *)((char *)(header) - FOOTER_SIZE - PREV_FOOTER(header)->size - HEADER_SIZE))
 #define NEXT_BLOCK(header)      ((block_header_t *)((char *)(header) + HEADER_SIZE + (header)->size + FOOTER_SIZE))
 
+#define SIZE_MASK               (~(size_t)(ALIGNMENT - 1))
+#define MMAP_FLAG               (0x1)
+
+#define BLOCK_IS_MMAP(header)   ((header)->size & MMAP_FLAG)
+#define BLOCK_RAW_SIZE(header)  ((header)->size & SIZE_MASK)
+
 void            block_set_size(block_header_t *block, size_t size);
 block_header_t *block_split(block_header_t *block, size_t size);
 block_header_t *block_coalesce(block_header_t *block);
