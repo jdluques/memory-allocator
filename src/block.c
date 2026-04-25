@@ -37,7 +37,7 @@ block_header_t *block_coalesce(block_header_t *block) {
 
     if (!at_heap_start) {
         block_footer_t *prev_footer = PREV_FOOTER(block);
-        block_header_t *prev = PREV_BLOCK(block);
+        block_header_t *prev        = PREV_BLOCK(block);
 
         if (prev->is_free) {
             freelist_remove(prev);
