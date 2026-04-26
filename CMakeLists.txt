@@ -41,6 +41,8 @@ target_link_options(alloc_warnings INTERFACE
 
 # ── Core library ───────────────────────────────────────────────────────────────
 
+find_package(Threads REQUIRED)
+
 add_library(alloc STATIC
     src/allocator.c
     src/block.c
@@ -55,7 +57,7 @@ target_include_directories(alloc
 
 if(NOT CMAKE_SKIP_INSTALL_RULES)
 else()
-    target_link_libraries(alloc PRIVATE alloc_warnings)
+    target_link_libraries(alloc PRIVATE alloc_warnings Threads::Threads)
 endif()
 
 # Debug builds get extra fill-pattern instrumentation via a compile definition

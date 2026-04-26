@@ -5,16 +5,19 @@
 #include "freelist.h"
 #include "internal.h"
 
+#include <pthread.h>
 #include <stdbool.h>
-#include <stdint.h>
-#include <unistd.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <unistd.h>
 
 static bool heap_initialized = false;
 void *heap_start    = NULL;
 void *heap_end      =  NULL;
+
+pthread_mutex_t heap_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static void heap_init(void) {
     heap_start  = sbrk(0);
@@ -65,6 +68,9 @@ static void mmap_free(block_header_t *block) {
 
 void *my_malloc(size_t size) {
     if (size == 0) return NULL;
+
+    pthread_mutex_lock(&heap_mutex);
+
     if (!heap_initialized) heap_init();
 
     size = ALIGN(size);
@@ -73,11 +79,16 @@ void *my_malloc(size_t size) {
     if (block) {
         freelist_remove(block);
     } else {
-        if (size >= MMAP_THRESHOLD)
+        if (size >= MMAP_THRESHOLD) {
+            pthread_mutex_unlock(&heap_mutex);
             return mmap_alloc(size);
+        }
         
         block = heap_extend(size);
-        if (!block) return NULL;
+        if (!block) {
+            pthread_mutex_unlock(&heap_mutex);
+            return NULL;
+        }
     }
 
     if (block_can_split(block, size)) {
@@ -86,6 +97,8 @@ void *my_malloc(size_t size) {
     }
 
     block->is_free = false;
+
+    pthread_mutex_unlock(&heap_mutex);
 
     return BLOCK_PAYLOAD(block);
 }
@@ -100,15 +113,21 @@ void my_free(void *ptr) {
         return;
     }
 
+    pthread_mutex_lock(&heap_mutex);
+
     block->is_free = true;
     block = block_coalesce(block);
     
     freelist_insert(block);
+
+    pthread_mutex_unlock(&heap_mutex);
 }
 
 void *my_calloc(size_t nmemb, size_t size) {
+    if (nmemb == 0 || size == 0) return NULL;
+
     size_t total = nmemb * size;
-    if (nmemb != 0 && total / nmemb != size) return NULL;
+    if (total / nmemb != size) return NULL;
 
     void *ptr = my_malloc(total);
     if (ptr) memset(ptr, 0, total);
@@ -124,10 +143,17 @@ void *my_realloc(void *ptr, size_t size) {
     size_t          raw_size = BLOCK_RAW_SIZE(block);
 
     if (raw_size >= size) {
-        if (!BLOCK_IS_MMAP(block) && block_can_split(block, size)) {
-            block_header_t *remainder = block_split(block, size);
-            freelist_insert(remainder);
+        if (!BLOCK_IS_MMAP(block)){
+            pthread_mutex_lock(&heap_mutex);
+
+            if (block_can_split(block, size)) {
+                block_header_t *remainder = block_split(block, size);
+                freelist_insert(remainder);
+            }
+
+            pthread_mutex_unlock(&heap_mutex);
         }
+
         return ptr;
     }
 
